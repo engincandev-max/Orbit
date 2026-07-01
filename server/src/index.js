@@ -63,9 +63,7 @@ io.on('connection', (socket) => {
   
   let currentUserRoom = null;
   let currentUserId = null;
-
-  // Send current rooms state to the newly connected user
-  socket.emit('room-users-update', roomUsers);
+  let isAuthenticated = false; // Güvenlik yaması: Kullanıcı şifreyi girdi mi?
 
   // Handle joining a voice room
   socket.on('join-room', (roomId, peerId, username, password) => {
@@ -73,6 +71,10 @@ io.on('connection', (socket) => {
       socket.emit('join-error', 'Hatalı sunucu şifresi!');
       return;
     }
+    
+    isAuthenticated = true;
+    socket.join('authenticated-users'); // Şifreyi girenler yetkili grubuna alınır
+
     // Eğer önceden başka bir odadaysa, oradan ayrıl
     if (currentUserRoom && currentUserRoom !== roomId && currentUserId) {
       socket.leave(currentUserRoom);
@@ -109,47 +111,54 @@ io.on('connection', (socket) => {
     // Notify others in the room
     socket.to(roomId).emit('user-connected', peerId);
     
-    // Send updated user list to everyone
-    io.emit('room-users-update', roomUsers);
+    // Send updated user list ONLY to authenticated users
+    io.to('authenticated-users').emit('room-users-update', roomUsers);
     
     console.log(`User ${username} (${peerId}) joined room: ${roomId}`);
   });
 
   // Handle updating username
   socket.on('update-username', (newUsername) => {
+    if (!isAuthenticated) return; // Güvenlik yaması
     if (currentUserRoom && currentUserId && roomUsers[currentUserRoom]) {
       const userIndex = roomUsers[currentUserRoom].findIndex(u => u.peerId === currentUserId);
       if (userIndex >= 0) {
         roomUsers[currentUserRoom][userIndex].username = newUsername || 'Misafir';
-        io.emit('room-users-update', roomUsers);
+        io.to('authenticated-users').emit('room-users-update', roomUsers);
       }
     }
   });
 
   // Handle media status updates (mute/deafen)
   socket.on('update-media-status', ({ isMuted, isDeafened }) => {
+    if (!isAuthenticated) return; // Güvenlik yaması
     if (currentUserRoom && currentUserId && roomUsers[currentUserRoom]) {
       const userIndex = roomUsers[currentUserRoom].findIndex(u => u.peerId === currentUserId);
       if (userIndex >= 0) {
         roomUsers[currentUserRoom][userIndex].isMuted = isMuted;
         roomUsers[currentUserRoom][userIndex].isDeafened = isDeafened;
-        io.emit('room-users-update', roomUsers);
+        io.to('authenticated-users').emit('room-users-update', roomUsers);
       }
     }
   });
 
   // Handle chat messages
   socket.on('send-message', (roomId, messageData) => {
+    if (!isAuthenticated) return; // Güvenlik yaması
+    // Ek güvenlik: Sadece bulunduğu odaya mesaj atabilir
+    if (currentUserRoom !== roomId) return; 
+    
     // Broadcast the message to everyone in the room except the sender
     socket.to(roomId).emit('receive-message', messageData);
   });
 
   // Handle manual leave room (Hanging up the call)
   socket.on('leave-room', (roomId, userId) => {
+    if (!isAuthenticated) return;
     if (roomId && userId && roomUsers[roomId]) {
       socket.leave(roomId);
       roomUsers[roomId] = roomUsers[roomId].filter(u => u.peerId !== userId);
-      io.emit('room-users-update', roomUsers);
+      io.to('authenticated-users').emit('room-users-update', roomUsers);
       socket.to(roomId).emit('user-disconnected', userId);
       
       if (currentUserRoom === roomId) {
@@ -163,7 +172,7 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
     if (currentUserRoom && currentUserId && roomUsers[currentUserRoom]) {
       roomUsers[currentUserRoom] = roomUsers[currentUserRoom].filter(u => u.peerId !== currentUserId);
-      io.emit('room-users-update', roomUsers);
+      io.to('authenticated-users').emit('room-users-update', roomUsers);
       socket.to(currentUserRoom).emit('user-disconnected', currentUserId);
     }
   });
