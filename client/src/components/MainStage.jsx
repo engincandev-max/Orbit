@@ -156,13 +156,13 @@ export default function MainStage() {
     const analyser = audioContext.createAnalyser();
     
     analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.2; // Tepkime süresini hızlandır (Gecikmeyi/Delay'i azaltır)
+    analyser.smoothingTimeConstant = 0.1; // Daha da hızlandırıldı (Gecikmeyi minimize eder)
     source.connect(analyser);
 
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     let animationId;
     let lastSpokeTime = 0;
-    const HOLD_TIME_MS = 1000; // Konuşma bitse bile mikrofonu 1 saniye daha açık tut (Sesin kesilmesini önler)
+    const HOLD_TIME_MS = 1500; // Konuşma bitse bile mikrofonu 1.5 saniye daha açık tut (Sesin kesilmesini önler)
 
     const checkVolume = () => {
       analyser.getByteFrequencyData(dataArray);
