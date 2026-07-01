@@ -117,7 +117,7 @@ export default function SettingsModal() {
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-zinc-900 rounded-xl w-full max-w-xl flex flex-col shadow-2xl border border-zinc-800">
+      <div className="bg-zinc-900 rounded-xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl border border-zinc-800">
         
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-zinc-800">
