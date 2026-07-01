@@ -194,9 +194,9 @@ io.on('connection', (socket) => {
     lastMessageTime = now;
 
     // Payload (Veri) Boyutu Doğrulaması: Sunucuyu çökertmek için devasa metin atılmasını engelle
-    if (messageData && typeof messageData.text === 'string') {
-      if (messageData.text.length > 500) {
-        messageData.text = messageData.text.substring(0, 500) + '...'; // 500 karakterle sınırla
+    if (messageData && messageData.message && typeof messageData.message.text === 'string') {
+      if (messageData.message.text.length > 500) {
+        messageData.message.text = messageData.message.text.substring(0, 500) + '...'; // 500 karakterle sınırla
       }
     } else {
       return; // Geçersiz veri tipi
