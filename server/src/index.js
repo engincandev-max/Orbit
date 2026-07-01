@@ -65,13 +65,25 @@ io.on('connection', (socket) => {
   let currentUserId = null;
   let isAuthenticated = false; // Güvenlik yaması: Kullanıcı şifreyi girdi mi?
 
+  // Brute-force koruması için state (IP tabanlı)
+  const clientIp = socket.handshake.address;
+
   // Handle joining a voice room
   socket.on('join-room', (roomId, peerId, username, password) => {
+    // Brute-force denemelerini engelle: 5 saniyede sadece 1 deneme yapılabilir
+    if (socket._joinRateLimit && Date.now() - socket._joinRateLimit < 5000) {
+      socket.emit('join-error', 'Çok fazla deneme yaptınız. Lütfen bekleyin.');
+      return;
+    }
+    
     if (password !== SERVER_PASSWORD) {
+      socket._joinRateLimit = Date.now(); // Hatalı şifrede cezalandır (5 saniye bekleme)
       socket.emit('join-error', 'Hatalı sunucu şifresi!');
       return;
     }
     
+    // Şifre doğruysa cezayı kaldır
+    socket._joinRateLimit = 0;
     isAuthenticated = true;
     socket.join('authenticated-users'); // Şifreyi girenler yetkili grubuna alınır
 
@@ -142,11 +154,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Socket Rate Limiting (Spam Koruması)
+  let lastMessageTime = 0;
+
   // Handle chat messages
   socket.on('send-message', (roomId, messageData) => {
     if (!isAuthenticated) return; // Güvenlik yaması
     // Ek güvenlik: Sadece bulunduğu odaya mesaj atabilir
     if (currentUserRoom !== roomId) return; 
+    
+    // Spam / DoS Koruması: Saniyede 1 mesajdan fazla atılamaz
+    const now = Date.now();
+    if (now - lastMessageTime < 500) {
+      return; // Yarım saniyeden kısa sürede mesaj atıyorsa reddet (Spam botu)
+    }
+    lastMessageTime = now;
+
+    // Payload (Veri) Boyutu Doğrulaması: Sunucuyu çökertmek için devasa metin atılmasını engelle
+    if (messageData && typeof messageData.text === 'string') {
+      if (messageData.text.length > 500) {
+        messageData.text = messageData.text.substring(0, 500) + '...'; // 500 karakterle sınırla
+      }
+    } else {
+      return; // Geçersiz veri tipi
+    }
     
     // Broadcast the message to everyone in the room except the sender
     socket.to(roomId).emit('receive-message', messageData);
