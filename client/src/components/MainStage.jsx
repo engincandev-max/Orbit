@@ -92,6 +92,9 @@ export default function MainStage() {
     }
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
     
     // Ses analizini yapmak için stream'i klonluyoruz ki, asıl stream'i (WebRTC) sessize alsak bile analizi durdurmayalım
     const analysisStream = localStream.clone();
@@ -298,10 +301,44 @@ export default function MainStage() {
   const [spotlightId, setSpotlightId] = React.useState(null);
 
   const handleVideoClick = () => {
-    if (!localStream) {
-      requestMediaPermissions('video');
+    if (isVideoOn) {
+      if (localStream) {
+        // Kamerayı tamamen kapat (Yeşil ışığı söndür)
+        const videoTracks = localStream.getVideoTracks();
+        videoTracks.forEach(track => {
+          localStream.removeTrack(track);
+          track.stop();
+        });
+
+        // Kamerasız halimizle herkese yeniden bağlan
+        Object.values(callsRef.current).forEach(c => c.close());
+        callsRef.current = {};
+
+        if (peer && socket) {
+          const roomUsers = useAppStore.getState().roomUsers;
+          const myPeerId = useAppStore.getState().myPeerId;
+          const usersInRoom = roomUsers[activeVoiceChannel] || [];
+
+          usersInRoom.forEach(u => {
+            if (u.peerId !== myPeerId) {
+              const call = peer.call(u.peerId, localStream);
+              call.on('stream', (userVideoStream) => {
+                addRemoteStream(u.peerId, userVideoStream);
+              });
+              call.on('close', () => {
+                if (callsRef.current[u.peerId] === call) {
+                  removeRemoteStream(u.peerId);
+                }
+              });
+              callsRef.current[u.peerId] = call;
+            }
+          });
+        }
+      }
+      useAppStore.getState().toggleVideo();
     } else {
-      toggleVideo();
+      // Yeniden izin isteyerek kamerayı başlat (Çünkü track.stop() ile tamamen öldürdük)
+      requestMediaPermissions('video');
     }
   };
 

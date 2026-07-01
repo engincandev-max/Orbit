@@ -123,7 +123,7 @@ const useAppStore = create(
       setInputVolume: (val) => set({ inputVolume: val }),
 
       // Voice Activity Detection (VAD) State
-      voiceThreshold: 20, // 0-100 arası desibel eşiği
+      voiceThreshold: 5, // 0-100 arası desibel eşiği
       setVoiceThreshold: (val) => set({ voiceThreshold: val }),
       currentVolume: 0, // Anlık mikrofon ses seviyesi (Görselleştirme için)
       setCurrentVolume: (val) => set({ currentVolume: val }),

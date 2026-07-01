@@ -31,38 +31,67 @@ export default function SettingsModal() {
   });
 
   useEffect(() => {
+    let audioContext;
+    let analyser;
+    let microphone;
+    let animationId;
+
     if (isSettingsOpen) {
       setEditUsername(username || '');
-      // Ask for permission first so we get the labels of the devices
+      
       navigator.mediaDevices.getUserMedia({ audio: true, video: true })
         .then(stream => {
-          // Immediately stop the tracks we just opened to get permission
-          stream.getTracks().forEach(track => track.stop());
-          
-          return navigator.mediaDevices.enumerateDevices();
-        })
-        .then(deviceInfos => {
-          const categorized = {
-            audioinput: [],
-            audiooutput: [],
-            videoinput: []
-          };
-          
-          deviceInfos.forEach(device => {
-            if (categorized[device.kind]) {
-              categorized[device.kind].push({
-                deviceId: device.deviceId,
-                label: device.label || `Cihaz ${categorized[device.kind].length + 1}`
-              });
+          // Yeşil ışığın yanık kalmaması için video track'i anında durdur (Sadece listelemek için iznini aldık)
+          stream.getVideoTracks().forEach(track => track.stop());
+
+          // Cihaz listesi için izinleri aldık, donanımları listeleyelim
+          return navigator.mediaDevices.enumerateDevices().then(deviceInfos => {
+            const categorized = { audioinput: [], audiooutput: [], videoinput: [] };
+            deviceInfos.forEach(device => {
+              if (categorized[device.kind]) {
+                categorized[device.kind].push({
+                  deviceId: device.deviceId,
+                  label: device.label || `Cihaz ${categorized[device.kind].length + 1}`
+                });
+              }
+            });
+            setDevices(categorized);
+            
+            // Mikrofon test çubuğu için bağımsız bir ses analizörü kur (Odaya girmeden bile çalışsın)
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') {
+              audioContext.resume();
             }
+            analyser = audioContext.createAnalyser();
+            microphone = audioContext.createMediaStreamSource(stream);
+            microphone.connect(analyser);
+            analyser.fftSize = 256;
+            
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            const updateVolume = () => {
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+              const volume = Math.min(100, Math.round((sum / dataArray.length / 255) * 100 * 2));
+              setCurrentVolume(volume);
+              animationId = requestAnimationFrame(updateVolume);
+            };
+            updateVolume();
           });
-          
-          setDevices(categorized);
         })
         .catch(err => {
-          console.error("Cihazlar alınamadı:", err);
+          console.error("Cihazlar veya mikrofon alınamadı:", err);
         });
     }
+
+    return () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      if (microphone) microphone.disconnect();
+      if (analyser) analyser.disconnect();
+      if (audioContext && audioContext.state !== 'closed') audioContext.close();
+      setCurrentVolume(0); // Çıkarken sıfırla
+    };
   }, [isSettingsOpen]);
 
   if (!isSettingsOpen) return null;
