@@ -287,53 +287,60 @@ export default function MainStage() {
     };
   }, [peer, localStream, addRemoteStream, removeRemoteStream]);
 
+  const reconnectPeers = (streamToUse) => {
+    Object.values(callsRef.current).forEach(c => c.close());
+    callsRef.current = {};
+
+    if (peer && socket) {
+      const roomUsers = useAppStore.getState().roomUsers;
+      const myPeerId = useAppStore.getState().myPeerId;
+      const usersInRoom = roomUsers[activeVoiceChannel] || [];
+
+      usersInRoom.forEach(u => {
+        if (u.peerId !== myPeerId) {
+          const call = peer.call(u.peerId, streamToUse);
+          call.on('stream', (userVideoStream) => {
+            addRemoteStream(u.peerId, userVideoStream);
+          });
+          call.on('close', () => {
+            if (callsRef.current[u.peerId] === call) {
+              removeRemoteStream(u.peerId);
+            }
+          });
+          callsRef.current[u.peerId] = call;
+        }
+      });
+    }
+  };
+
   const requestMediaPermissions = async (type) => {
     try {
       const audioConstraints = selectedMicId === 'default' 
         ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
         : { deviceId: { exact: selectedMicId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      
       const shouldRequestVideo = type === 'video' || isVideoOn;
       const videoConstraints = shouldRequestVideo 
         ? (selectedCameraId === 'default' ? true : { deviceId: { exact: selectedCameraId } })
         : false;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const newStream = await navigator.mediaDevices.getUserMedia({
         video: videoConstraints,
         audio: audioConstraints
       });
       
-      // Initialize track states based on what user clicked
-      stream.getAudioTracks().forEach(track => track.enabled = type === 'audio' || isMicOn);
-      stream.getVideoTracks().forEach(track => track.enabled = type === 'video' || isVideoOn);
-      
-      setLocalStream(stream);
-
-      // Tüm mevcut çağrıları kapat ve HERKESE YENİDEN ÇAĞRI AT
-      Object.values(callsRef.current).forEach(c => c.close());
-      callsRef.current = {};
-
-      if (peer && socket) {
-        const roomUsers = useAppStore.getState().roomUsers;
-        const myPeerId = useAppStore.getState().myPeerId;
-        const usersInRoom = roomUsers[activeVoiceChannel] || [];
-
-        usersInRoom.forEach(u => {
-          if (u.peerId !== myPeerId) {
-            const call = peer.call(u.peerId, stream);
-            call.on('stream', (userVideoStream) => {
-              addRemoteStream(u.peerId, userVideoStream);
-            });
-            call.on('close', () => {
-              if (callsRef.current[u.peerId] === call) {
-                removeRemoteStream(u.peerId);
-              }
-            });
-            callsRef.current[u.peerId] = call;
-          }
-        });
+      // Stop old tracks immediately to release hardware locks
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
       }
+      
+      // Set initial enabled state
+      newStream.getAudioTracks().forEach(track => track.enabled = type === 'audio' || isMicOn);
+      newStream.getVideoTracks().forEach(track => track.enabled = type === 'video' || isVideoOn);
+      
+      setLocalStream(newStream);
+      reconnectPeers(newStream);
 
-      // Sync Zustand state based on what they clicked first
       if (type === 'audio') toggleMic();
       if (type === 'video') toggleVideo();
       
@@ -353,53 +360,63 @@ export default function MainStage() {
 
   const [spotlightId, setSpotlightId] = React.useState(null);
 
-  const handleVideoClick = () => {
+  const handleVideoClick = async () => {
     if (isVideoOn) {
+      // Turn off video
       if (localStream) {
-        // Kamerayı tamamen kapat (Yeşil ışığı söndür)
         const videoTracks = localStream.getVideoTracks();
         videoTracks.forEach(track => {
           localStream.removeTrack(track);
-          track.stop();
+          track.stop(); // Releases hardware lock
         });
-
-        // Kamerasız halimizle herkese yeniden bağlan
-        Object.values(callsRef.current).forEach(c => c.close());
-        callsRef.current = {};
-
-        if (peer && socket) {
-          const roomUsers = useAppStore.getState().roomUsers;
-          const myPeerId = useAppStore.getState().myPeerId;
-          const usersInRoom = roomUsers[activeVoiceChannel] || [];
-
-          usersInRoom.forEach(u => {
-            if (u.peerId !== myPeerId) {
-              const call = peer.call(u.peerId, localStream);
-              call.on('stream', (userVideoStream) => {
-                addRemoteStream(u.peerId, userVideoStream);
-              });
-              call.on('close', () => {
-                if (callsRef.current[u.peerId] === call) {
-                  removeRemoteStream(u.peerId);
-                }
-              });
-              callsRef.current[u.peerId] = call;
-            }
-          });
-        }
+        reconnectPeers(localStream);
       }
       useAppStore.getState().toggleVideo();
     } else {
-      // Yeniden izin isteyerek kamerayı başlat (Çünkü track.stop() ile tamamen öldürdük)
-      requestMediaPermissions('video');
+      // Turn on video
+      if (localStream) {
+        try {
+          const videoConstraints = selectedCameraId === 'default' ? true : { deviceId: { exact: selectedCameraId } };
+          const newVideoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+          const newVideoTrack = newVideoStream.getVideoTracks()[0];
+          
+          localStream.addTrack(newVideoTrack);
+          reconnectPeers(localStream);
+          useAppStore.getState().toggleVideo();
+        } catch (err) {
+          console.error("Kamera izni alınamadı:", err);
+          alert("Kamera izni alınamadı. Lütfen tarayıcı izinlerini kontrol edin.");
+        }
+      } else {
+        // İlk defa stream başlatılıyorsa
+        requestMediaPermissions('video');
+      }
     }
   };
 
   const handleScreenShareClick = async () => {
     if (isScreenSharing) {
-      toggleScreenShare(); 
-      // Ekran paylaşımını kapatırken tekrar kameraya dön
-      requestMediaPermissions(isVideoOn ? 'video' : 'audio');
+      // Turn off screen share
+      if (localStream) {
+        const screenTracks = localStream.getVideoTracks();
+        screenTracks.forEach(track => {
+          localStream.removeTrack(track);
+          track.stop();
+        });
+      }
+      useAppStore.getState().toggleScreenShare(); 
+      // Ekran paylaşımını kapatırken, eskiden kamera açıksa onu geri getir
+      if (isVideoOn) {
+        try {
+          const videoConstraints = selectedCameraId === 'default' ? true : { deviceId: { exact: selectedCameraId } };
+          const newVideoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+          localStream.addTrack(newVideoStream.getVideoTracks()[0]);
+        } catch (err) {
+          console.error("Kamera geri açılamadı:", err);
+          useAppStore.getState().toggleVideo(); // Fallback to turning it off
+        }
+      }
+      reconnectPeers(localStream);
       return;
     }
 
@@ -407,53 +424,27 @@ export default function MainStage() {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const screenTrack = screenStream.getVideoTracks()[0];
       
-      // Eski kamerayı kapat
+      // Eski kamerayı kapat (varsa)
       if (localStream) {
-        const oldVideoTrack = localStream.getVideoTracks()[0];
-        if (oldVideoTrack) oldVideoTrack.stop();
-      }
-
-      // Yeni bir karma stream oluştur (Mevcut ses + Yeni Ekran Görüntüsü)
-      const newStream = new MediaStream();
-      if (localStream && localStream.getAudioTracks().length > 0) {
-        newStream.addTrack(localStream.getAudioTracks()[0]);
-      }
-      newStream.addTrack(screenTrack);
-      
-      setLocalStream(newStream);
-
-      // Herkesle olan mevcut bağlantıyı kopar ve EKRANLI HALİYLE YENİDEN ARA
-      Object.values(callsRef.current).forEach(c => c.close());
-      callsRef.current = {};
-
-      if (peer && socket) {
-        const roomUsers = useAppStore.getState().roomUsers;
-        const myPeerId = useAppStore.getState().myPeerId;
-        const usersInRoom = roomUsers[activeVoiceChannel] || [];
-
-        usersInRoom.forEach(u => {
-          if (u.peerId !== myPeerId) {
-            const call = peer.call(u.peerId, newStream);
-            call.on('stream', (userVideoStream) => {
-              addRemoteStream(u.peerId, userVideoStream);
-            });
-            call.on('close', () => {
-              if (callsRef.current[u.peerId] === call) {
-                removeRemoteStream(u.peerId);
-              }
-            });
-            callsRef.current[u.peerId] = call;
-          }
+        const oldVideoTracks = localStream.getVideoTracks();
+        oldVideoTracks.forEach(track => {
+          localStream.removeTrack(track);
+          track.stop();
         });
+        
+        localStream.addTrack(screenTrack);
       }
+      
+      useAppStore.getState().toggleScreenShare();
+      reconnectPeers(localStream);
 
       screenTrack.onended = () => {
+        // Kullanıcı tarayıcıdan "Paylaşımı Durdur" derse
         if (useAppStore.getState().isScreenSharing) {
-          handleScreenShareClick(); 
+          handleScreenShareClick();
         }
       };
-
-      toggleScreenShare();
+      
       setSpotlightId('local'); // Ekran paylaşıldığında otomatik büyüt
 
     } catch (err) {

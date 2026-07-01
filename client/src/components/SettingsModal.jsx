@@ -43,6 +43,8 @@ export default function SettingsModal() {
       // Video izni istemiyoruz çünkü MainStage'de açık olan kamerayı kesip siyah ekrana düşürüyor!
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
+          // Stream'i cleanup'ta durdurmak için referans alalım
+          window._settingsTempStream = stream;
 
           // Cihaz listesi için izinleri aldık, donanımları listeleyelim
           return navigator.mediaDevices.enumerateDevices().then(deviceInfos => {
@@ -90,6 +92,10 @@ export default function SettingsModal() {
       if (microphone) microphone.disconnect();
       if (analyser) analyser.disconnect();
       if (audioContext && audioContext.state !== 'closed') audioContext.close();
+      if (window._settingsTempStream) {
+        window._settingsTempStream.getTracks().forEach(track => track.stop());
+        window._settingsTempStream = null;
+      }
       setCurrentVolume(0); // Çıkarken sıfırla
     };
   }, [isSettingsOpen]);
