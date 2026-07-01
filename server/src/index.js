@@ -55,7 +55,7 @@ const peerServer = ExpressPeerServer(server, {
 app.use('/peerjs', peerServer);
 
 const roomUsers = {}; // Basit kimlik doğrulama - TS tarzı sunucu şifresi
-const SERVER_PASSWORD = process.env.SERVER_PASSWORD ? process.env.SERVER_PASSWORD.trim() : undefined;
+const SERVER_PASSWORD = process.env.SERVER_PASSWORD ? process.env.SERVER_PASSWORD.trim() : 'Orbit2024';
 
 // Socket.io Events (Signaling for WebRTC and Chat)
 io.on('connection', (socket) => {
@@ -100,6 +100,7 @@ io.on('connection', (socket) => {
     }
     
     if (password !== SERVER_PASSWORD) {
+      console.log(`[LOGIN FAILED] Received: "${password}" | Expected: "${SERVER_PASSWORD}"`);
       socket._joinRateLimit = Date.now(); // Hatalı şifrede cezalandır (5 saniye bekleme)
       socket.emit('join-error', 'Hatalı sunucu şifresi!');
       return;
