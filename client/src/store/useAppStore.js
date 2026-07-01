@@ -288,6 +288,7 @@ const useAppStore = create(
     {
       name: 'nexus-storage', // name of the item in the storage (must be unique)
       partialize: (state) => ({ 
+        messages: state.messages, // Keep the old messages key for migration
         messagesByChannel: state.messagesByChannel,
         selectedMicId: state.selectedMicId,
         selectedSpeakerId: state.selectedSpeakerId,
@@ -299,6 +300,15 @@ const useAppStore = create(
         username: state.username,
         serverPassword: state.serverPassword
       }),
+      merge: (persistedState, currentState) => {
+        // Eski mesaj yapısını yeni çoklu kanal yapısına taşı (Migration)
+        if (persistedState.messages && (!persistedState.messagesByChannel || Object.keys(persistedState.messagesByChannel).length === 0)) {
+          persistedState.messagesByChannel = {
+            'Genel Sohbet': persistedState.messages
+          };
+        }
+        return { ...currentState, ...persistedState };
+      }
     }
   )
 );
