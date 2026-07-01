@@ -3,13 +3,17 @@ import { persist } from 'zustand/middleware';
 import { io } from 'socket.io-client';
 import { Peer } from 'peerjs';
 
-const SERVER_URL = 'http://localhost:5000';
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5000';
 const socket = io(SERVER_URL);
 
+// Parse SERVER_URL for PeerJS
+const url = new URL(SERVER_URL);
+const isSecure = url.protocol === 'https:';
 const peer = new Peer(undefined, {
-  host: 'localhost',
-  port: 5000,
-  path: '/peerjs'
+  host: url.hostname,
+  port: url.port ? url.port : (isSecure ? 443 : 80),
+  path: '/peerjs',
+  secure: isSecure
 });
 
 const useAppStore = create(
