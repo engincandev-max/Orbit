@@ -236,24 +236,28 @@ export default function MainStage() {
       });
       
       // Initialize track states based on what user clicked
-      stream.getAudioTracks().forEach(track => track.enabled = type === 'audio');
-      stream.getVideoTracks().forEach(track => track.enabled = type === 'video');
+      stream.getAudioTracks().forEach(track => track.enabled = type === 'audio' || isMicOn);
+      stream.getVideoTracks().forEach(track => track.enabled = type === 'video' || isVideoOn);
       
       setLocalStream(stream);
 
-      // Mevcut tüm bağlantılara YENİDEN çağrı başlat (Sonradan mikrofon açıldığında track'leri garantiye almak için)
-      if (peer && socket) {
-        Object.keys(callsRef.current).forEach(peerId => {
-          const call = peer.call(peerId, stream);
-          call.on('stream', (userVideoStream) => {
-            addRemoteStream(peerId, userVideoStream);
-          });
-          call.on('close', () => {
-            removeRemoteStream(peerId);
-          });
-          callsRef.current[peerId] = call;
-        });
-      }
+      // WebRTC replaceTrack ile mevcut aramaları kesmeden izleri (kameraları) güncelle
+      Object.values(callsRef.current).forEach(call => {
+        if (call.peerConnection) {
+          const senders = call.peerConnection.getSenders();
+          const newVideoTrack = stream.getVideoTracks()[0];
+          const newAudioTrack = stream.getAudioTracks()[0];
+          
+          if (newVideoTrack) {
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) videoSender.replaceTrack(newVideoTrack);
+          }
+          if (newAudioTrack) {
+            const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+            if (audioSender) audioSender.replaceTrack(newAudioTrack);
+          }
+        }
+      });
 
       // Sync Zustand state based on what they clicked first
       if (type === 'audio') toggleMic();
@@ -286,46 +290,48 @@ export default function MainStage() {
   const handleScreenShareClick = async () => {
     if (isScreenSharing) {
       toggleScreenShare(); 
-      if (isVideoOn) {
-        requestMediaPermissions('video');
-      } else {
-        requestMediaPermissions('audio');
-      }
+      // Ekran paylaşımını kapatırken tekrar kameraya dön
+      requestMediaPermissions(isVideoOn ? 'video' : 'audio');
       return;
     }
 
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const screenTrack = screenStream.getVideoTracks()[0];
       
-      if (localStream && isMicOn) {
-        const audioTracks = localStream.getAudioTracks();
-        if (audioTracks.length > 0) {
-          screenStream.addTrack(audioTracks[0]);
+      if (localStream) {
+        // Mevcut kamerayı durdur
+        const oldVideoTrack = localStream.getVideoTracks()[0];
+        if (oldVideoTrack) {
+          localStream.removeTrack(oldVideoTrack);
+          oldVideoTrack.stop();
         }
+        // Ekranı yerleştir
+        localStream.addTrack(screenTrack);
+        
+        // Yeni bir kopya yaratarak React'in videoyu yenilemesini sağla
+        const newStream = new MediaStream(localStream.getTracks());
+        setLocalStream(newStream);
+
+        // Bağlı olan herkesteki video kanalını KESİNTİSİZ olarak EKRAN PAYLAŞIMI ile değiştir
+        Object.values(callsRef.current).forEach(call => {
+          if (call.peerConnection) {
+            const videoSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+              videoSender.replaceTrack(screenTrack);
+            }
+          }
+        });
       }
 
-      screenStream.getVideoTracks()[0].onended = () => {
+      screenTrack.onended = () => {
         if (useAppStore.getState().isScreenSharing) {
           handleScreenShareClick(); 
         }
       };
 
-      setLocalStream(screenStream);
       toggleScreenShare();
       setSpotlightId('local'); // Ekran paylaşıldığında otomatik büyüt
-
-      if (peer && socket) {
-        Object.keys(callsRef.current).forEach(peerId => {
-          const call = peer.call(peerId, screenStream);
-          call.on('stream', (userVideoStream) => {
-            addRemoteStream(peerId, userVideoStream);
-          });
-          call.on('close', () => {
-            removeRemoteStream(peerId);
-          });
-          callsRef.current[peerId] = call;
-        });
-      }
 
     } catch (err) {
       console.error("Ekran paylaşılamadı:", err);
