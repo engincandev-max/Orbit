@@ -202,6 +202,13 @@ export default function MainStage() {
 
     const handleCall = (call) => {
       console.log('Biri bizi arıyor:', call.peer);
+      
+      // Eğer bu kişiden halihazırda bir arama varsa, önce onu temizle (Çakışmayı önler)
+      if (callsRef.current[call.peer]) {
+        callsRef.current[call.peer].close();
+        removeRemoteStream(call.peer);
+      }
+
       // Aramayı cevapla ve localStream'imizi gönder
       call.answer(localStream);
       
@@ -210,7 +217,11 @@ export default function MainStage() {
       });
       
       call.on('close', () => {
-        removeRemoteStream(call.peer);
+        // Eğer callsRef'te hala BAZI çağrılar varsa ve o bu çağrıysa sil
+        if (callsRef.current[call.peer] === call) {
+          removeRemoteStream(call.peer);
+          delete callsRef.current[call.peer];
+        }
       });
       
       callsRef.current[call.peer] = call;
@@ -241,23 +252,30 @@ export default function MainStage() {
       
       setLocalStream(stream);
 
-      // WebRTC replaceTrack ile mevcut aramaları kesmeden izleri (kameraları) güncelle
-      Object.values(callsRef.current).forEach(call => {
-        if (call.peerConnection) {
-          const senders = call.peerConnection.getSenders();
-          const newVideoTrack = stream.getVideoTracks()[0];
-          const newAudioTrack = stream.getAudioTracks()[0];
-          
-          if (newVideoTrack) {
-            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-            if (videoSender) videoSender.replaceTrack(newVideoTrack);
+      // Tüm mevcut çağrıları kapat ve HERKESE YENİDEN ÇAĞRI AT
+      Object.values(callsRef.current).forEach(c => c.close());
+      callsRef.current = {};
+
+      if (peer && socket) {
+        const roomUsers = useAppStore.getState().roomUsers;
+        const myPeerId = useAppStore.getState().myPeerId;
+        const usersInRoom = roomUsers[activeVoiceChannel] || [];
+
+        usersInRoom.forEach(u => {
+          if (u.peerId !== myPeerId) {
+            const call = peer.call(u.peerId, stream);
+            call.on('stream', (userVideoStream) => {
+              addRemoteStream(u.peerId, userVideoStream);
+            });
+            call.on('close', () => {
+              if (callsRef.current[u.peerId] === call) {
+                removeRemoteStream(u.peerId);
+              }
+            });
+            callsRef.current[u.peerId] = call;
           }
-          if (newAudioTrack) {
-            const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-            if (audioSender) audioSender.replaceTrack(newAudioTrack);
-          }
-        }
-      });
+        });
+      }
 
       // Sync Zustand state based on what they clicked first
       if (type === 'audio') toggleMic();
@@ -299,27 +317,42 @@ export default function MainStage() {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const screenTrack = screenStream.getVideoTracks()[0];
       
+      // Eski kamerayı kapat
       if (localStream) {
-        // Mevcut kamerayı durdur
         const oldVideoTrack = localStream.getVideoTracks()[0];
-        if (oldVideoTrack) {
-          localStream.removeTrack(oldVideoTrack);
-          oldVideoTrack.stop();
-        }
-        // Ekranı yerleştir
-        localStream.addTrack(screenTrack);
-        
-        // Yeni bir kopya yaratarak React'in videoyu yenilemesini sağla
-        const newStream = new MediaStream(localStream.getTracks());
-        setLocalStream(newStream);
+        if (oldVideoTrack) oldVideoTrack.stop();
+      }
 
-        // Bağlı olan herkesteki video kanalını KESİNTİSİZ olarak EKRAN PAYLAŞIMI ile değiştir
-        Object.values(callsRef.current).forEach(call => {
-          if (call.peerConnection) {
-            const videoSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (videoSender) {
-              videoSender.replaceTrack(screenTrack);
-            }
+      // Yeni bir karma stream oluştur (Mevcut ses + Yeni Ekran Görüntüsü)
+      const newStream = new MediaStream();
+      if (localStream && localStream.getAudioTracks().length > 0) {
+        newStream.addTrack(localStream.getAudioTracks()[0]);
+      }
+      newStream.addTrack(screenTrack);
+      
+      setLocalStream(newStream);
+
+      // Herkesle olan mevcut bağlantıyı kopar ve EKRANLI HALİYLE YENİDEN ARA
+      Object.values(callsRef.current).forEach(c => c.close());
+      callsRef.current = {};
+
+      if (peer && socket) {
+        const roomUsers = useAppStore.getState().roomUsers;
+        const myPeerId = useAppStore.getState().myPeerId;
+        const usersInRoom = roomUsers[activeVoiceChannel] || [];
+
+        usersInRoom.forEach(u => {
+          if (u.peerId !== myPeerId) {
+            const call = peer.call(u.peerId, newStream);
+            call.on('stream', (userVideoStream) => {
+              addRemoteStream(u.peerId, userVideoStream);
+            });
+            call.on('close', () => {
+              if (callsRef.current[u.peerId] === call) {
+                removeRemoteStream(u.peerId);
+              }
+            });
+            callsRef.current[u.peerId] = call;
           }
         });
       }
