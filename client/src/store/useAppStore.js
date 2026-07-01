@@ -286,7 +286,7 @@ const useAppStore = create(
     }; // Close the returned object
     }, // Close the creator function
     {
-      name: 'nexus-storage', // name of the item in the storage (must be unique)
+      name: 'orbit-storage-v3', // name of the item in the storage (must be unique)
       partialize: (state) => ({ 
         messages: state.messages, // Keep the old messages key for migration
         messagesByChannel: state.messagesByChannel,

@@ -79,6 +79,9 @@ export default function WelcomeModal() {
                   placeholder="Şifreyi girin"
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                   autoFocus={!!username}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                 />
                 <p className="text-xs text-zinc-500 mt-2">Şifre cihazınıza kaydedilir, bir daha sorulmaz.</p>
               </div>

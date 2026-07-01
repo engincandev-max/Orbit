@@ -42,7 +42,12 @@ app.use('/api', limiter);
 
 // Basic Route
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'success', message: 'Orbit API is running securely.' });
+  res.status(200).json({ status: 'ORBİT Server is running perfectly!' });
+});
+
+// Versiyon kontrolü için eklendi (Render'ın güncellenip güncellenmediğini test etmek için)
+app.get('/api/version', (req, res) => {
+  res.status(200).send('orbit-v3-reset');
 });
 
 const { ExpressPeerServer } = require('peer');
