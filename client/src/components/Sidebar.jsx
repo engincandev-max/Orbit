@@ -55,8 +55,7 @@ export default function Sidebar() {
       {/* Channels */}
       <div className="w-60 bg-zinc-900 flex flex-col border-r border-zinc-800/50">
         <div className="h-12 flex items-center justify-between px-4 font-bold border-b border-zinc-800/50 shadow-sm relative group">
-          <span>Nexus Server</span>
-          
+          <span>ORBİT Server</span>
           <div className="flex items-center space-x-1">
             {/* TS Style: Server Password is in WelcomeModal, no need for admin lock toggle */}
           </div>

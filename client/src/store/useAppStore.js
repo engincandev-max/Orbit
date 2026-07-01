@@ -281,7 +281,7 @@ const useAppStore = create(
     }; // Close the returned object
     }, // Close the creator function
     {
-      name: 'nexus-storage', // name of the item in the storage (must be unique)
+      name: 'orbit-storage', // name of the item in the storage (must be unique)
       partialize: (state) => ({ 
         messagesByChannel: state.messagesByChannel,
         selectedMicId: state.selectedMicId,
