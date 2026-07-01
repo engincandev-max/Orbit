@@ -1,0 +1,160 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+
+// Environment variables
+const PORT = process.env.PORT || 5000;
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+const app = express();
+const server = http.createServer(app);
+
+// Socket.io initialization with strict CORS
+const io = new Server(server, {
+  cors: {
+    origin: CLIENT_URL,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+});
+
+// Middleware - Security & Parsers
+app.use(helmet()); // Secure HTTP headers
+app.use(
+  cors({
+    origin: CLIENT_URL,
+    credentials: true,
+  })
+);
+app.use(express.json({ limit: '10kb' })); // Body parser, limit payload size
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser()); // Parse cookies
+
+// Rate Limiting to prevent Brute-Force attacks
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+});
+app.use('/api', limiter);
+
+// Basic Route
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'success', message: 'Nexus API is running securely.' });
+});
+
+const { ExpressPeerServer } = require('peer');
+
+// ExpressPeerServer Configuration
+const peerServer = ExpressPeerServer(server, {
+  debug: true,
+  path: '/'
+});
+app.use('/peerjs', peerServer);
+
+const roomUsers = {}; // { 'Oyun Odası': ['userId1', 'userId2'] }
+
+const SERVER_PASSWORD = process.env.SERVER_PASSWORD || 'orbit';
+
+// Socket.io Events (Signaling for WebRTC and Chat)
+io.on('connection', (socket) => {
+  console.log('A user connected:', socket.id);
+  
+  let currentUserRoom = null;
+  let currentUserId = null;
+
+  // Send current rooms state to the newly connected user
+  socket.emit('room-users-update', roomUsers);
+
+  // Handle joining a voice room
+  socket.on('join-room', (roomId, peerId, username, password) => {
+    if (password !== SERVER_PASSWORD) {
+      socket.emit('join-error', 'Hatalı sunucu şifresi!');
+      return;
+    }
+    // Eğer önceden başka bir odadaysa, oradan ayrıl
+    if (currentUserRoom && currentUserRoom !== roomId && currentUserId) {
+      socket.leave(currentUserRoom);
+      if (roomUsers[currentUserRoom]) {
+        roomUsers[currentUserRoom] = roomUsers[currentUserRoom].filter(u => u.peerId !== currentUserId);
+      }
+      socket.to(currentUserRoom).emit('user-disconnected', currentUserId);
+    }
+
+    socket.join(roomId);
+    
+    if (!roomUsers[roomId]) {
+      roomUsers[roomId] = [];
+    }
+    
+    // Eğer kullanıcı zaten odadaysa güncelle, yoksa ekle
+    const existingUserIndex = roomUsers[roomId].findIndex(u => u.peerId === peerId);
+    if (existingUserIndex >= 0) {
+      roomUsers[roomId][existingUserIndex].username = username || 'Misafir';
+      roomUsers[roomId][existingUserIndex].socketId = socket.id;
+    } else {
+      roomUsers[roomId].push({ peerId, socketId: socket.id, username: username || 'Misafir' });
+    }
+
+    currentUserRoom = roomId;
+    currentUserId = peerId;
+
+    // Notify others in the room
+    socket.to(roomId).emit('user-connected', peerId);
+    
+    // Send updated user list to everyone
+    io.emit('room-users-update', roomUsers);
+    
+    console.log(`User ${username} (${peerId}) joined room: ${roomId}`);
+  });
+
+  // Handle updating username
+  socket.on('update-username', (newUsername) => {
+    if (currentUserRoom && currentUserId && roomUsers[currentUserRoom]) {
+      const userIndex = roomUsers[currentUserRoom].findIndex(u => u.peerId === currentUserId);
+      if (userIndex >= 0) {
+        roomUsers[currentUserRoom][userIndex].username = newUsername || 'Misafir';
+        io.emit('room-users-update', roomUsers);
+      }
+    }
+  });
+
+  // Handle chat messages
+  socket.on('send-message', (roomId, messageData) => {
+    // Broadcast the message to everyone in the room except the sender
+    socket.to(roomId).emit('receive-message', messageData);
+  });
+
+  // Handle manual leave room (Hanging up the call)
+  socket.on('leave-room', (roomId, userId) => {
+    if (roomId && userId && roomUsers[roomId]) {
+      socket.leave(roomId);
+      roomUsers[roomId] = roomUsers[roomId].filter(u => u.peerId !== userId);
+      io.emit('room-users-update', roomUsers);
+      socket.to(roomId).emit('user-disconnected', userId);
+      
+      if (currentUserRoom === roomId) {
+        currentUserRoom = null;
+        currentUserId = null;
+      }
+    }
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    if (currentUserRoom && currentUserId && roomUsers[currentUserRoom]) {
+      roomUsers[currentUserRoom] = roomUsers[currentUserRoom].filter(u => u.peerId !== currentUserId);
+      io.emit('room-users-update', roomUsers);
+      socket.to(currentUserRoom).emit('user-disconnected', currentUserId);
+    }
+  });
+});
+
+// Start Server
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
