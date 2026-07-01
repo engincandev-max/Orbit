@@ -74,6 +74,11 @@ const useAppStore = create(
           const state = get();
           
           if (state.activeVoiceChannel !== channel) {
+            // Eğer bir kanaldan çıkıyorsak (yeni kanal null veya başka bir kanalsa) eski kanaldan ayrıl
+            if (state.activeVoiceChannel && state.myPeerId) {
+              socket.emit('leave-room', state.activeVoiceChannel, state.myPeerId);
+            }
+
             // Eğer kanaldan ayrılıyor veya kanal değiştiriyorsak, mevcut yayınları temizle
             state.clearRemoteStreams && state.clearRemoteStreams();
             
@@ -279,5 +284,15 @@ const useAppStore = create(
     }
   )
 );
+
+// Sayfa kapatıldığında veya yenilendiğinde sunucuya anında haber ver (Kanalda hayalet olarak kalmamak için)
+window.addEventListener('beforeunload', () => {
+  const state = useAppStore.getState();
+  if (state.activeVoiceChannel && state.myPeerId) {
+    socket.emit('leave-room', state.activeVoiceChannel, state.myPeerId);
+  }
+  socket.disconnect();
+  peer.destroy();
+});
 
 export default useAppStore;
