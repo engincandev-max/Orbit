@@ -150,7 +150,7 @@ const useAppStore = create(
 
       // Hardware toggles
       toggleMic: () => {
-        const { localStream, isMicOn, isDeafened } = get();
+        const { localStream, isMicOn, isDeafened, socket } = get();
         // Sağırlaştırılmışsa mikrofon açılamaz
         if (isDeafened) return; 
 
@@ -159,11 +159,17 @@ const useAppStore = create(
             track.enabled = !isMicOn;
           });
         }
-        set({ isMicOn: !isMicOn });
+        
+        const newIsMicOn = !isMicOn;
+        if (socket) {
+          socket.emit('update-media-status', { isMuted: !newIsMicOn, isDeafened });
+        }
+        
+        set({ isMicOn: newIsMicOn });
       },
 
       toggleDeafen: () => {
-        const { isDeafened, isMicOn, localStream } = get();
+        const { isDeafened, isMicOn, localStream, socket } = get();
         const newDeafenedState = !isDeafened;
         
         // Eğer kulaklık kapatılıyorsa, mikrofon da zorunlu kapatılır
@@ -171,8 +177,14 @@ const useAppStore = create(
           if (localStream) {
             localStream.getAudioTracks().forEach(track => track.enabled = false);
           }
+          if (socket) {
+            socket.emit('update-media-status', { isMuted: true, isDeafened: newDeafenedState });
+          }
           set({ isDeafened: newDeafenedState, isMicOn: false });
         } else {
+          if (socket) {
+            socket.emit('update-media-status', { isMuted: !isMicOn, isDeafened: newDeafenedState });
+          }
           set({ isDeafened: newDeafenedState });
         }
       },

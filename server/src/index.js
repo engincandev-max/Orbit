@@ -94,7 +94,13 @@ io.on('connection', (socket) => {
       roomUsers[roomId][existingUserIndex].username = username || 'Misafir';
       roomUsers[roomId][existingUserIndex].socketId = socket.id;
     } else {
-      roomUsers[roomId].push({ peerId, socketId: socket.id, username: username || 'Misafir' });
+      roomUsers[roomId].push({ 
+        peerId, 
+        socketId: socket.id, 
+        username: username || 'Misafir',
+        isMuted: true,
+        isDeafened: false
+      });
     }
 
     currentUserRoom = roomId;
@@ -115,6 +121,18 @@ io.on('connection', (socket) => {
       const userIndex = roomUsers[currentUserRoom].findIndex(u => u.peerId === currentUserId);
       if (userIndex >= 0) {
         roomUsers[currentUserRoom][userIndex].username = newUsername || 'Misafir';
+        io.emit('room-users-update', roomUsers);
+      }
+    }
+  });
+
+  // Handle media status updates (mute/deafen)
+  socket.on('update-media-status', ({ isMuted, isDeafened }) => {
+    if (currentUserRoom && currentUserId && roomUsers[currentUserRoom]) {
+      const userIndex = roomUsers[currentUserRoom].findIndex(u => u.peerId === currentUserId);
+      if (userIndex >= 0) {
+        roomUsers[currentUserRoom][userIndex].isMuted = isMuted;
+        roomUsers[currentUserRoom][userIndex].isDeafened = isDeafened;
         io.emit('room-users-update', roomUsers);
       }
     }

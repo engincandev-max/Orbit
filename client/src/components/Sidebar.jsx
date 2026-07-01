@@ -130,17 +130,26 @@ export default function Sidebar() {
                         ) : null}
                       </div>
                     ) : (
-                      <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            useAppStore.getState().togglePeerMute(peerId);
-                          }}
-                          className={`p-1 rounded hover:bg-zinc-700 transition-colors ${useAppStore.getState().mutedPeers.includes(peerId) ? 'text-red-500' : 'text-zinc-400 hover:text-white'}`}
-                          title={useAppStore.getState().mutedPeers.includes(peerId) ? "Sesi Aç" : "Kullanıcıyı Sustur"}
-                        >
-                          {useAppStore.getState().mutedPeers.includes(peerId) ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                        </button>
+                      <div className="ml-auto flex items-center space-x-1.5">
+                        {user.isDeafened ? (
+                          <VolumeX size={14} className="text-red-500" />
+                        ) : user.isMuted ? (
+                          <MicOff size={14} className="text-red-500" />
+                        ) : null}
+                        
+                        {/* Local mute toggle (only visible on hover) */}
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              useAppStore.getState().togglePeerMute(peerId);
+                            }}
+                            className={`p-1 rounded hover:bg-zinc-700 transition-colors ${useAppStore.getState().mutedPeers.includes(peerId) ? 'text-red-500' : 'text-zinc-400 hover:text-white'}`}
+                            title={useAppStore.getState().mutedPeers.includes(peerId) ? "Sesi Aç" : "Kullanıcıyı Sustur (Sadece Sen Duymazsın)"}
+                          >
+                            {useAppStore.getState().mutedPeers.includes(peerId) ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                          </button>
+                        </div>
                       </div>
                     )}
                     
