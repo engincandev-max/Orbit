@@ -181,9 +181,9 @@ export default function SettingsModal() {
                 value={selectedMicId}
                 onChange={(e) => handleDeviceChange('mic', e.target.value)}
               >
-                <option value="default">Varsayılan (Default)</option>
+                <option value="default" className="bg-zinc-900 text-white">Varsayılan (Default)</option>
                 {devices.audioinput.map(device => (
-                  <option key={device.deviceId} value={device.deviceId}>
+                  <option key={device.deviceId} value={device.deviceId} className="bg-zinc-900 text-white">
                     {device.label}
                   </option>
                 ))}
@@ -224,9 +224,9 @@ export default function SettingsModal() {
                 value={selectedSpeakerId}
                 onChange={(e) => handleDeviceChange('speaker', e.target.value)}
               >
-                <option value="default">Varsayılan (Default)</option>
+                <option value="default" className="bg-zinc-900 text-white">Varsayılan (Default)</option>
                 {devices.audiooutput.map(device => (
-                  <option key={device.deviceId} value={device.deviceId}>
+                  <option key={device.deviceId} value={device.deviceId} className="bg-zinc-900 text-white">
                     {device.label}
                   </option>
                 ))}
@@ -246,9 +246,9 @@ export default function SettingsModal() {
                 value={selectedCameraId}
                 onChange={(e) => handleDeviceChange('camera', e.target.value)}
               >
-                <option value="default">Varsayılan (Default)</option>
+                <option value="default" className="bg-zinc-900 text-white">Varsayılan (Default)</option>
                 {devices.videoinput.map(device => (
-                  <option key={device.deviceId} value={device.deviceId}>
+                  <option key={device.deviceId} value={device.deviceId} className="bg-zinc-900 text-white">
                     {device.label}
                   </option>
                 ))}
