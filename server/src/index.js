@@ -56,9 +56,8 @@ const peerServer = ExpressPeerServer(server, {
 });
 app.use('/peerjs', peerServer);
 
-const roomUsers = {}; // { 'Oyun Odası': ['userId1', 'userId2'] }
-
-const SERVER_PASSWORD = process.env.SERVER_PASSWORD || 'orbit';
+const roomUsers = {}; // Basit kimlik doğrulama - TS tarzı sunucu şifresi
+const SERVER_PASSWORD = process.env.SERVER_PASSWORD || 'X7v$K9p#M2qL@8wN';
 
 // Socket.io Events (Signaling for WebRTC and Chat)
 io.on('connection', (socket) => {
