@@ -25,7 +25,9 @@ function RemoteVideo({ stream, peerId, isMuted, username }) {
           analyser = audioContext.createAnalyser();
           analyser.fftSize = 256;
           
-          const analysisStream = stream.clone();
+          const audioTracks = stream.getAudioTracks();
+          if (audioTracks.length === 0) return;
+          const analysisStream = new MediaStream([audioTracks[0].clone()]);
           microphone = audioContext.createMediaStreamSource(analysisStream);
           microphone.connect(analyser);
 
@@ -139,8 +141,13 @@ export default function MainStage() {
       audioContext.resume();
     }
     
-    // Ses analizini yapmak için stream'i klonluyoruz ki, asıl stream'i (WebRTC) sessize alsak bile analizi durdurmayalım
-    const analysisStream = localStream.clone();
+    // Ses analizini yapmak için sadece AUDIO track'ini klonluyoruz ki,
+    // asıl stream'i (WebRTC) sessize alsak bile analizi durdurmayalım.
+    // DİKKAT: Tüm stream'i clone() yapmıyoruz çünkü o zaman Video Track de klonlanıyor
+    // ve kamerayı kapatsak bile klonlanan video arkada açık kalıp yeşil ışığı yakıyor!
+    const audioTracks = localStream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+    const analysisStream = new MediaStream([audioTracks[0].clone()]);
     
     // Klondaki audio track her zaman açık kalsın ki okuyabilelim
     analysisStream.getAudioTracks().forEach(track => track.enabled = true);
