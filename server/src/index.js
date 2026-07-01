@@ -16,9 +16,8 @@ const server = http.createServer(app);
 // Socket.io initialization with strict CORS
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_URL,
+    origin: "*",
     methods: ['GET', 'POST'],
-    credentials: true,
   },
 });
 
@@ -26,8 +25,7 @@ const io = new Server(server, {
 app.use(helmet()); // Secure HTTP headers
 app.use(
   cors({
-    origin: CLIENT_URL,
-    credentials: true,
+    origin: "*",
   })
 );
 app.use(express.json({ limit: '10kb' })); // Body parser, limit payload size
