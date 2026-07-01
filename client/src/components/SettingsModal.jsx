@@ -39,10 +39,9 @@ export default function SettingsModal() {
     if (isSettingsOpen) {
       setEditUsername(username || '');
       
-      navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+      // Video izni istemiyoruz çünkü MainStage'de açık olan kamerayı kesip siyah ekrana düşürüyor!
+      navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
-          // Yeşil ışığın yanık kalmaması için video track'i anında durdur (Sadece listelemek için iznini aldık)
-          stream.getVideoTracks().forEach(track => track.stop());
 
           // Cihaz listesi için izinleri aldık, donanımları listeleyelim
           return navigator.mediaDevices.enumerateDevices().then(deviceInfos => {

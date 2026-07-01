@@ -240,8 +240,8 @@ export default function MainStage() {
   const requestMediaPermissions = async (type) => {
     try {
       const audioConstraints = selectedMicId === 'default' 
-        ? { echoCancellation: false, noiseSuppression: true, autoGainControl: true } 
-        : { deviceId: { exact: selectedMicId }, echoCancellation: false, noiseSuppression: true, autoGainControl: true };
+        ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+        : { deviceId: { exact: selectedMicId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
       const videoConstraints = selectedCameraId === 'default' ? true : { deviceId: { exact: selectedCameraId } };
 
       const stream = await navigator.mediaDevices.getUserMedia({
