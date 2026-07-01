@@ -285,7 +285,10 @@ export default function MainStage() {
       const audioConstraints = selectedMicId === 'default' 
         ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
         : { deviceId: { exact: selectedMicId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-      const videoConstraints = selectedCameraId === 'default' ? true : { deviceId: { exact: selectedCameraId } };
+      const shouldRequestVideo = type === 'video' || isVideoOn;
+      const videoConstraints = shouldRequestVideo 
+        ? (selectedCameraId === 'default' ? true : { deviceId: { exact: selectedCameraId } })
+        : false;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: videoConstraints,
