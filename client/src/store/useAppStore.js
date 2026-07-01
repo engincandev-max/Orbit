@@ -56,10 +56,15 @@ const useAppStore = create(
         set({ roomUsers: rooms });
       });
 
-      // Socket.io dinleyicisi: Odaya giriş hatası (sunucu kapalı vb.)
+      // Socket.io dinleyicisi: Odaya giriş veya sunucu giriş hatası (sunucu kapalı vb.)
       socket.on('join-error', (msg) => {
         alert(msg);
         set({ activeVoiceChannel: null, serverPassword: '' }); // Katılımı iptal et ve şifreyi temizle
+      });
+      
+      socket.on('login-error', (msg) => {
+        alert(msg);
+        set({ serverPassword: '' });
       });
 
       return {
