@@ -113,12 +113,16 @@ export default function MainStage() {
     addRemoteStream,
     removeRemoteStream,
     clearRemoteStreams,
-    mutedPeers
+    mutedPeers,
+    autoGainControl,
+    noiseSuppression
   } = useAppStore();
 
   const videoRef = useRef(null);
   // Aramaları tutmak için (kapatmak gerekirse diye)
   const callsRef = useRef({});
+  // Saf mikrofon kanalını tutmak için (ekran paylaşımı ile ses karıştırılırsa kaybolmasın diye)
+  const rawMicTrackRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current && localStream) {
@@ -143,10 +147,9 @@ export default function MainStage() {
     
     // Ses analizini yapmak için sadece AUDIO track'ini klonluyoruz ki,
     // asıl stream'i (WebRTC) sessize alsak bile analizi durdurmayalım.
-    // DİKKAT: Tüm stream'i clone() yapmıyoruz çünkü o zaman Video Track de klonlanıyor
-    // ve kamerayı kapatsak bile klonlanan video arkada açık kalıp yeşil ışığı yakıyor!
-    const audioTracks = localStream.getAudioTracks();
+    const audioTracks = rawMicTrackRef.current ? [rawMicTrackRef.current] : localStream.getAudioTracks();
     if (audioTracks.length === 0) return;
+    
     const analysisStream = new MediaStream([audioTracks[0].clone()]);
     
     // Klondaki audio track her zaman açık kalsın ki okuyabilelim
@@ -186,9 +189,13 @@ export default function MainStage() {
       const isSpeaking = (Date.now() - lastSpokeTime) < HOLD_TIME_MS;
 
       // WebRTC gönderilen asıl stream'deki mikrofonu VAD eşiğine göre Aç / Kapat
-      localStream.getAudioTracks().forEach(track => {
-        track.enabled = isSpeaking;
-      });
+      if (rawMicTrackRef.current) {
+        rawMicTrackRef.current.enabled = isSpeaking;
+      } else {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = isSpeaking;
+        });
+      }
 
       animationId = requestAnimationFrame(checkVolume);
     };
@@ -316,8 +323,8 @@ export default function MainStage() {
   const requestMediaPermissions = async (type) => {
     try {
       const audioConstraints = selectedMicId === 'default' 
-        ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-        : { deviceId: { exact: selectedMicId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+        ? { echoCancellation: true, noiseSuppression: noiseSuppression, autoGainControl: autoGainControl } 
+        : { deviceId: { exact: selectedMicId }, echoCancellation: true, noiseSuppression: noiseSuppression, autoGainControl: autoGainControl };
       
       const shouldRequestVideo = type === 'video' || isVideoOn;
       const videoConstraints = shouldRequestVideo 
@@ -334,8 +341,13 @@ export default function MainStage() {
         localStream.getTracks().forEach(track => track.stop());
       }
       
+      const newAudioTracks = newStream.getAudioTracks();
+      if (newAudioTracks.length > 0) {
+        rawMicTrackRef.current = newAudioTracks[0];
+      }
+      
       // Set initial enabled state
-      newStream.getAudioTracks().forEach(track => track.enabled = type === 'audio' || isMicOn);
+      newAudioTracks.forEach(track => track.enabled = type === 'audio' || isMicOn);
       newStream.getVideoTracks().forEach(track => track.enabled = type === 'video' || isVideoOn);
       
       setLocalStream(newStream);
@@ -403,6 +415,22 @@ export default function MainStage() {
           localStream.removeTrack(track);
           track.stop();
         });
+        
+        // Ses karıştırıcıyı kapat ve orijinal mikrofonu geri yükle
+        if (window._screenMixerContext) {
+          window._screenMixerContext.close();
+          window._screenMixerContext = null;
+          
+          const oldAudioTracks = localStream.getAudioTracks();
+          oldAudioTracks.forEach(track => {
+            localStream.removeTrack(track);
+            track.stop();
+          });
+          
+          if (rawMicTrackRef.current) {
+            localStream.addTrack(rawMicTrackRef.current);
+          }
+        }
       }
       useAppStore.getState().toggleScreenShare(); 
       // Ekran paylaşımını kapatırken, eskiden kamera açıksa onu geri getir
@@ -421,8 +449,23 @@ export default function MainStage() {
     }
 
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      const screenTrack = screenStream.getVideoTracks()[0];
+      // Ekran kalitesini artır ve ses iste
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+        video: {
+          displaySurface: "monitor",
+          logicalSurface: true,
+          frameRate: { ideal: 60, max: 60 },
+          width: { ideal: 1920, max: 2560 },
+          height: { ideal: 1080, max: 1440 }
+        }, 
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        } 
+      });
+      const screenVideoTrack = screenStream.getVideoTracks()[0];
+      const screenAudioTrack = screenStream.getAudioTracks()[0];
       
       // Eski kamerayı kapat (varsa)
       if (localStream) {
@@ -432,13 +475,34 @@ export default function MainStage() {
           track.stop();
         });
         
-        localStream.addTrack(screenTrack);
+        localStream.addTrack(screenVideoTrack);
+        
+        // Eğer ekrandan ses geliyorsa, mikrofon ile miksle!
+        if (screenAudioTrack && rawMicTrackRef.current) {
+          const actx = new (window.AudioContext || window.webkitAudioContext)();
+          const dest = actx.createMediaStreamDestination();
+          
+          const micSource = actx.createMediaStreamSource(new MediaStream([rawMicTrackRef.current]));
+          micSource.connect(dest);
+          
+          const screenSource = actx.createMediaStreamSource(new MediaStream([screenAudioTrack]));
+          screenSource.connect(dest);
+          
+          const mixedTrack = dest.stream.getAudioTracks()[0];
+          
+          // Mevcut audio track'leri kaldır (sadece yerel stream'den, hardware'den değil)
+          const oldAudioTracks = localStream.getAudioTracks();
+          oldAudioTracks.forEach(track => localStream.removeTrack(track));
+          
+          localStream.addTrack(mixedTrack);
+          window._screenMixerContext = actx;
+        }
       }
       
       useAppStore.getState().toggleScreenShare();
       reconnectPeers(localStream);
 
-      screenTrack.onended = () => {
+      screenVideoTrack.onended = () => {
         // Kullanıcı tarayıcıdan "Paylaşımı Durdur" derse
         if (useAppStore.getState().isScreenSharing) {
           handleScreenShareClick();

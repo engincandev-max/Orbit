@@ -68,6 +68,29 @@ io.on('connection', (socket) => {
   // Brute-force koruması için state (IP tabanlı)
   const clientIp = socket.handshake.address;
 
+  // Handle server login (Odaya girmeden önce sunucuya giriş yapmak için)
+  socket.on('login', (password) => {
+    // Brute-force koruması
+    if (socket._loginRateLimit && Date.now() - socket._loginRateLimit < 5000) {
+      socket.emit('login-error', 'Çok fazla deneme yaptınız. Lütfen bekleyin.');
+      return;
+    }
+    
+    if (password !== SERVER_PASSWORD) {
+      socket._loginRateLimit = Date.now();
+      socket.emit('login-error', 'Hatalı sunucu şifresi!');
+      return;
+    }
+    
+    socket._loginRateLimit = 0;
+    isAuthenticated = true;
+    socket.join('authenticated-users');
+    
+    // Sadece başarılı giriş yapanlara odaların güncel durumunu gönder
+    socket.emit('room-users-update', roomUsers);
+    console.log('User authenticated to server:', socket.id);
+  });
+
   // Handle joining a voice room
   socket.on('join-room', (roomId, peerId, username, password) => {
     // Brute-force denemelerini engelle: 5 saniyede sadece 1 deneme yapılabilir

@@ -20,7 +20,11 @@ export default function SettingsModal() {
     username,
     setUsername,
     socket,
-    setCurrentVolume
+    setCurrentVolume,
+    autoGainControl,
+    setAutoGainControl,
+    noiseSuppression,
+    setNoiseSuppression
   } = useAppStore();
 
   const [editUsername, setEditUsername] = useState('');
@@ -185,9 +189,27 @@ export default function SettingsModal() {
                 ))}
               </select>
             </div>
-            <p className="text-xs text-emerald-400/80">
-              * Yapay Zeka destekli Gürültü Engelleyici (Noise Suppression) ve Yankı Önleyici devrededir.
-            </p>
+            <div className="flex flex-col gap-2 mt-2">
+              <label className="flex items-center space-x-2 text-sm text-zinc-300 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={noiseSuppression} 
+                  onChange={(e) => setNoiseSuppression(e.target.checked)}
+                  className="rounded border-zinc-700 bg-zinc-900 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-950"
+                />
+                <span>Yapay Zeka Gürültü Engelleyici (Noise Suppression)</span>
+              </label>
+              
+              <label className="flex items-center space-x-2 text-sm text-zinc-300 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={autoGainControl} 
+                  onChange={(e) => setAutoGainControl(e.target.checked)}
+                  className="rounded border-zinc-700 bg-zinc-900 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-950"
+                />
+                <span>Otomatik Ses Yüksekliği (Auto Gain Control)</span>
+              </label>
+            </div>
           </div>
 
           {/* Audio Output (Speaker) */}

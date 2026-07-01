@@ -22,6 +22,8 @@ export default function WelcomeModal() {
     if (inputName.trim().length >= 2 && inputPassword.trim().length > 0) {
       setUsername(inputName.trim());
       setServerPassword(inputPassword.trim());
+      // Anında giriş yap
+      useAppStore.getState().socket.emit('login', inputPassword.trim());
     }
   };
 

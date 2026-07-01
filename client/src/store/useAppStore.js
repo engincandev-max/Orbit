@@ -19,7 +19,14 @@ const peer = new Peer(undefined, {
 const useAppStore = create(
   persist(
     (set, get) => {
-      
+      // Socket bağlantısı kurulduğunda veya yeniden bağlandığında otomatik giriş yap
+      socket.on('connect', () => {
+        const { serverPassword } = get();
+        if (serverPassword) {
+          socket.emit('login', serverPassword);
+        }
+      });
+
       peer.on('open', (id) => {
         set({ myPeerId: id });
         console.log('My Peer ID:', id);
@@ -122,13 +129,17 @@ const useAppStore = create(
       selectedSpeakerId: 'default',
       selectedCameraId: 'default',
       inputVolume: 100, // 0 to 200%
+      autoGainControl: true, // Otomatik Ses Kazancı
+      noiseSuppression: true, // Gürültü Engelleme
       setSelectedMicId: (id) => set({ selectedMicId: id }),
       setSelectedSpeakerId: (id) => set({ selectedSpeakerId: id }),
       setSelectedCameraId: (id) => set({ selectedCameraId: id }),
       setInputVolume: (val) => set({ inputVolume: val }),
+      setAutoGainControl: (val) => set({ autoGainControl: val }),
+      setNoiseSuppression: (val) => set({ noiseSuppression: val }),
 
       // Voice Activity Detection (VAD) State
-      voiceThreshold: 5, // 0-100 arası desibel eşiği
+      voiceThreshold: 30, // 0-100 arası desibel eşiği
       setVoiceThreshold: (val) => set({ voiceThreshold: val }),
       currentVolume: 0, // Anlık mikrofon ses seviyesi (Görselleştirme için)
       setCurrentVolume: (val) => set({ currentVolume: val }),
@@ -277,6 +288,8 @@ const useAppStore = create(
         selectedSpeakerId: state.selectedSpeakerId,
         selectedCameraId: state.selectedCameraId,
         inputVolume: state.inputVolume,
+        autoGainControl: state.autoGainControl,
+        noiseSuppression: state.noiseSuppression,
         voiceThreshold: state.voiceThreshold,
         username: state.username,
         serverPassword: state.serverPassword
