@@ -128,11 +128,25 @@ const useAppStore = create(
       currentVolume: 0, // Anlık mikrofon ses seviyesi (Görselleştirme için)
       setCurrentVolume: (val) => set({ currentVolume: val }),
 
+      speakingPeers: [],
+      setPeerSpeaking: (peerId, isSpeaking) => set(state => {
+        const isCurrentlySpeaking = state.speakingPeers.includes(peerId);
+        if (isSpeaking && !isCurrentlySpeaking) {
+          return { speakingPeers: [...state.speakingPeers, peerId] };
+        } else if (!isSpeaking && isCurrentlySpeaking) {
+          return { speakingPeers: state.speakingPeers.filter(id => id !== peerId) };
+        }
+        return state;
+      }),
+
       // Media Controls State
       isMicOn: false,
       isVideoOn: false,
       isScreenSharing: false,
       isDeafened: false,
+      isChatOpen: true,
+
+      toggleChat: () => set((state) => ({ isChatOpen: !state.isChatOpen })),
 
       // Hardware toggles
       toggleMic: () => {

@@ -19,7 +19,8 @@ export default function SettingsModal() {
     isMicOn,
     username,
     setUsername,
-    socket
+    socket,
+    setCurrentVolume
   } = useAppStore();
 
   const [editUsername, setEditUsername] = useState('');

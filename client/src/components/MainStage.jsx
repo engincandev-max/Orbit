@@ -1,18 +1,61 @@
 import React, { useEffect, useRef } from 'react';
-import { Hash, Users, Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff } from 'lucide-react';
+import { Hash, Users, Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 
 function RemoteVideo({ stream, peerId, isMuted, username }) {
   const ref = useRef(null);
   
   useEffect(() => {
+    let audioContext;
+    let analyser;
+    let microphone;
+    let animationId;
+
     if (ref.current && stream) {
       ref.current.srcObject = stream;
-      // Muted durumunu ref üzerinden de güncellemek sağlıklı olabilir
       ref.current.muted = isMuted;
       ref.current.play().catch(e => console.error('Remote video play error:', e));
+
+      // Uzak kullanıcının ses seviyesini analiz et (Işık yanıp sönmesi için)
+      if (stream.getAudioTracks().length > 0) {
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioContext.state === 'suspended') audioContext.resume();
+          
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          
+          const analysisStream = stream.clone();
+          microphone = audioContext.createMediaStreamSource(analysisStream);
+          microphone.connect(analyser);
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          
+          const checkVolume = () => {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const average = sum / dataArray.length;
+            const volume = Math.round((average / 255) * 100);
+            
+            useAppStore.getState().setPeerSpeaking(peerId, volume > 5);
+            animationId = requestAnimationFrame(checkVolume);
+          };
+          checkVolume();
+        } catch (e) {
+          console.error('Remote VAD error:', e);
+        }
+      }
     }
-  }, [stream, isMuted]);
+
+    return () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      if (microphone) microphone.disconnect();
+      if (analyser) analyser.disconnect();
+      if (audioContext && audioContext.state !== 'closed') audioContext.close();
+      useAppStore.getState().setPeerSpeaking(peerId, false);
+    };
+  }, [stream, isMuted, peerId]);
 
   // Check if track is enabled to show placeholder
   const hasVideo = stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled;
@@ -483,7 +526,13 @@ export default function MainStage() {
           {activeChannel}
         </div>
         <div className="flex items-center space-x-4 text-zinc-400">
-          <Users size={20} className="hover:text-zinc-200 cursor-pointer transition-colors" />
+          <button 
+            onClick={() => useAppStore.getState().toggleChat()}
+            className={`hover:text-zinc-200 cursor-pointer transition-colors p-1.5 rounded-lg ${useAppStore.getState().isChatOpen ? 'bg-zinc-700 text-zinc-200' : ''}`}
+            title="Sohbeti Aç/Kapat"
+          >
+            <MessageSquare size={20} />
+          </button>
         </div>
       </div>
 

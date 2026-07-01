@@ -14,7 +14,10 @@ export default function Sidebar() {
     toggleDeafen,
     setSettingsOpen,
     roomUsers,
-    myPeerId
+    myPeerId,
+    speakingPeers,
+    voiceThreshold,
+    currentVolume
   } = useAppStore();
 
   const channels = ['Genel Sohbet', 'Oyun Odası', 'Toplantı'];
@@ -105,25 +108,26 @@ export default function Sidebar() {
               {(roomUsers[channel] || []).map((user) => {
                 const { peerId, username } = user;
                 const displayUsername = username || 'Misafir';
+                const isSpeaking = peerId === myPeerId ? (currentVolume >= voiceThreshold) : speakingPeers.includes(peerId);
+
                 return (
                   <div key={peerId} className="flex items-center mt-1 ml-6 px-2 py-1 hover:bg-zinc-800/40 rounded transition-colors cursor-pointer group">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white ${peerId === myPeerId ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white transition-all ${isSpeaking ? 'ring-2 ring-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : ''} ${peerId === myPeerId ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
                       {displayUsername.charAt(0).toUpperCase()}
                     </div>
                     <span className={`ml-2 text-sm font-medium truncate group-hover:text-zinc-100 ${peerId === myPeerId ? 'text-emerald-400' : 'text-zinc-300'}`}>
                       {displayUsername}
                     </span>
                     
-                    {/* Sadece kendi durumumuzu (Mic/Deafen) biliyoruz, şimdilik karşı tarafınkini göstermiyoruz */}
                     {peerId === myPeerId ? (
                       <div className="ml-auto flex items-center space-x-1.5">
                         {isDeafened ? (
                           <VolumeX size={14} className="text-red-500" />
                         ) : !isMicOn ? (
                           <MicOff size={14} className="text-red-500" />
-                        ) : (
-                          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> // Konuşuyor ikonu
-                        )}
+                        ) : isSpeaking ? (
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -138,6 +142,11 @@ export default function Sidebar() {
                           {useAppStore.getState().mutedPeers.includes(peerId) ? <VolumeX size={14} /> : <Volume2 size={14} />}
                         </button>
                       </div>
+                    )}
+                    
+                    {/* Eğer karşı taraf konuşuyorsa (ve mute edilmemişse) onun için de ikon gösterelim, opacity-0 bypass eder */}
+                    {peerId !== myPeerId && isSpeaking && !useAppStore.getState().mutedPeers.includes(peerId) && (
+                      <div className="ml-2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse group-hover:hidden"></div>
                     )}
                   </div>
                 );
