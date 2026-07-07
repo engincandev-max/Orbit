@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { io } from 'socket.io-client';
 import { Peer } from 'peerjs';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5000';
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:5001';
 const socket = io(SERVER_URL);
 
 // Parse SERVER_URL for PeerJS
