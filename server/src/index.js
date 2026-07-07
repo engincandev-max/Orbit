@@ -82,6 +82,7 @@ io.on('connection', (socket) => {
     }
     
     if (password !== SERVER_PASSWORD) {
+      console.log(`[LOGIN FAILED] Received: "${password}" | Expected: "${SERVER_PASSWORD}"`);
       socket._loginRateLimit = Date.now();
       socket.emit('login-error', 'Hatalı sunucu şifresi!');
       return;
@@ -241,4 +242,5 @@ io.on('connection', (socket) => {
 // Start Server
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Active server password is: "${SERVER_PASSWORD}"`);
 });
