@@ -60,7 +60,7 @@ const peerServer = ExpressPeerServer(server, {
 app.use('/peerjs', peerServer);
 
 const roomUsers = {}; // Basit kimlik doğrulama - TS tarzı sunucu şifresi
-const SERVER_PASSWORD = process.env.SERVER_PASSWORD ? process.env.SERVER_PASSWORD.trim() : 'Orbit2024';
+const SERVER_PASSWORD = (process.env.SERVER_PASSWORD || process.env.PASSWORD_KEY || 'Orbit2024').trim();
 
 // Socket.io Events (Signaling for WebRTC and Chat)
 io.on('connection', (socket) => {
